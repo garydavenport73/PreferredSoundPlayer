@@ -1,18 +1,12 @@
-#   Gary Davenport functions 7/8/2021
+#   Gary Davenport preferredsoundplayer functions 7/8/2021
 #
-#   Plays wav files using the methods I typically use to play waves.
-#   Basically, I consider maintenance of code, ease of use, reliability
-#   and so forth and use these methods below as they seem to be the best 
-#   choices, considering the above factors.  See the README.md file 
-#   at the project site for more on why I've chosen these methods.
-#   
 #   This module has no dependencies, other than what comes with Windows 10, 
 #       the standard Linux kernel, MacOS 10.5 or later, and the 
 #       Python Standard Library.
-#      
-#   Windows10 functions use the winmm.dll Windows Multimedia API calls 
-#       using c function calls to play sounds.
 #
+#   ----------------Windows----------------
+#   Windows 10 uses the Windows winmm.dll Multimedia API to play sounds and the Python 'winsound' module to loop background .
+#   (Windows will only loop one background sound at a time.)
 #       See references:
 #       “Programming Windows: the Definitive Guide to the WIN32 API, 
 #           Chapter 22 Sound and Music Section III Advanced Topics 
@@ -23,11 +17,22 @@
 #       & https://github.com/TaylorSMarks/playsound/blob/master/playsound.py
 #
 #       To loop sounds, Windows10 uses winsound.Playsound() which does limit
-#       background loops to only 1 at a time compared to the other OS.
+#       background loops to only 1 at a time compared to the other OS and only .wav
+#
+#   ----------------Linux------------------
+#   Linux uses ALSA and gstreamer, part of Linux kernel, also may use ffmpg if available
+
+#   -Linux will always play .wavs with ALSA
+#   Otherwise:
+#   -Linux will use the first available player in this order: gst-1.0-play, ffmpeg, gst playbin(built on the fly) or ALSA
+#   -Linux will try to use gst-1.0-play first (usually present), if not present then
+#   -Linux will try to use ffmpeg as its player (usually present), if not present then
+#   -Linux will initialize a gstreamer playbin player (is supposed to always be present), if not present then
+#   -Linux will play the sound with ALSA, and if not a .wav file will sound like white noise.
+#
+#   ----------------MacOS-------------------
+#   -MacOS uses the afplay module which is present OS X 10.5 and later
 #       
-#   Linux uses ALSA which is part of the Linux kernel since version 2.6 and later
-#   MacOS uses the afplay module which is present OS X 10.5 and later
-#   
 
 from random import random
 from platform import system
@@ -37,6 +42,15 @@ import os
 from threading import Thread
 from time import sleep
 import sndhdr
+if system()=="Linux":
+    import shutil
+    try:
+        import gi
+        gi.require_version('Gst', '1.0')
+        from gi.repository import Gst
+    except:
+        pass
+    import os
 
 if system()=="Windows":
     from ctypes import c_buffer, windll
@@ -191,12 +205,56 @@ class customVariableTracker:
     def _getlooping(self):
         return(self.looping)
 
+###### 
+class SingleSoundLinux:
+    def __init__(self):
+        import gi
+        gi.require_version('Gst', '1.0')
+        from gi.repository import Gst
+        self.pl=None
+        self.gst=Gst.init()
+        self.playerType=""
+
+    def _gstPlayProcess(self):
+        self.pl.set_state(Gst.State.PLAYING)
+        bus = self.pl.get_bus()
+        bus.poll(Gst.MessageType.EOS, Gst.CLOCK_TIME_NONE)
+        self.pl.set_state(Gst.State.NULL)
+
+    def soundplay(self,fileName, block=True):
+        if self.getIsPlaying(self.pl)==False:
+            self.pl = Gst.ElementFactory.make("playbin", "player")
+            self.pl.set_property('uri','file://'+os.path.abspath(fileName))
+            self.playerType="gstreamer"
+            self.T=Thread(target=self._gstPlayProcess,daemon=True)
+            self.T.start()
+            if block==True:
+                self.T.join()
+            return([self.pl,self.playerType])
+        else:
+            print("already playing, open new SingleSound if you need to play simoultaneously")
+
+    def stopsound(self,sound):
+        #print(sound[1])
+        if sound[1]=="gstreamer":sound[0].set_state(Gst.State.NULL)
+
+    def getIsPlaying(self,song):
+        if song is None:return False
+        #print(song[1])
+        if song[1]=="gstreamer":
+            state=(str(song[0].get_state(Gst.State.PLAYING)[1]).split()[1])
+            if state=="GST_STATE_READY" or state=="GST_STATE_PLAYING":
+                return True
+            else:
+                return False
+
 #########################################################################
 # These function definitions are intended to be used by the end user,   #
 # but an instance of the class players above can be used also.          #
 #########################################################################       
 
 # plays a wave file and also returns the alias of the sound being played, async method is default
+"""
 def playwave(fileName, block=False):
     fileName=fileName
     if system()=="Linux": command = "exec aplay --quiet " + os.path.abspath(fileName)
@@ -208,8 +266,66 @@ def playwave(fileName, block=False):
     if block==True: P = subprocess.Popen(command, universal_newlines=True, shell=True,stdout=PIPE, stderr=PIPE).communicate()
     else: P = subprocess.Popen(command, universal_newlines=True, shell=True,stdout=PIPE, stderr=PIPE)
     return P
+"""
+
+# plays a sound file and also returns the alias of the sound being played, async method is default
+def soundplay(fileName, block=False):
+    ##if system()=="Linux": command = "exec aplay --quiet " + os.path.abspath(fileName)
+    if system()=="Linux":
+        print(fileName[-4:])
+        if fileName[-4:]==".wav": #use alsa if .wav
+            print("using alsa because its a wav")
+            command = "exec aplay --quiet " + os.path.abspath(fileName)
+        elif (shutil.which("gst-play-1.0") is not None)==True: #use gst-play-1.0 if available
+            print("using gst-play-1.0 since available")
+            command = "exec gst-play-1.0 " + os.path.abspath(fileName)
+        elif (shutil.which("ffplay") is not None)==True:       #use ffplay if present
+            print("using ffplay since available")
+            command = "exec ffplay -nodisp -autoexit -loglevel quiet " + os.path.abspath(fileName)
+        else:
+            try:
+                import gi
+                gi.require_version('Gst', '1.0')
+                from gi.repository import Gst
+                song=SingleSoundLinux().soundplay(fileName, block)
+                print("using gst playbin - successful try")
+                return(song)
+            except:
+                print("must use ALSA, all else failed")
+                command = "exec aplay --quiet " + os.path.abspath(fileName)
+    elif system()=="Windows":
+        song=SingleSoundWindows().soundplay(fileName, block)
+        return(song)       
+    elif system()=="Darwin": command = "exec afplay \'" + os.path.abspath(fileName)+"\'"
+    else: print(str(system()+" unknown to preferredsoundplayer"));return None
+
+    if block==True: P = subprocess.Popen(command, universal_newlines=True, shell=True,stdout=PIPE, stderr=PIPE).communicate()
+    else: P = subprocess.Popen(command, universal_newlines=True, shell=True,stdout=PIPE, stderr=PIPE)
+    return P
+
 # stops the wave being played, 'process' in the case of windows is actually the alias to the song
 # otherwise process is a process in other operating systems.
+def stopsound(process):
+    if process is not None:
+        try:
+            if process is not None:
+                if system()=="Windows":
+                    SingleSoundWindows().stopsound(process)
+                elif system()=="Linux":
+                    #see if process is GSTPlaybin
+                    if str(process).find("gstreamer") != -1: SingleSoundLinux().stopsound(process)
+                    else:
+                        process.terminate() # Linux but not GSTPlaybin 
+                else:
+                    process.terminate() # MacOS
+        except:
+            pass
+            #print("process is not playing")
+    else:
+        pass
+        #print("process ", str(process), " not playing")
+
+"""
 def stopwave(process):
     if process is not None:
         try:
@@ -223,21 +339,24 @@ def stopwave(process):
     else:
         pass
         #print("process ", str(process), " not playing")
-
+"""
 # pass the process or alias(windows) to the song and return True or False if it is playing
 def getIsPlaying(process):
     if system()=="Windows":
         return SingleSoundWindows().getIsPlaying(process)
-    isSongPlaying=False
-    if process is not None:
-        try: return(process.poll() is None)
-        except: pass
-    return isSongPlaying
+    else:
+        isSongPlaying=False
+        if process is not None:
+            #see if process is GSTPlaybin
+            if system()=="Linux":
+                #see if process is GSTPlaybin
+                if str(process).find("gstreamer") != -1: return SingleSoundLinux().getIsPlaying(process)
+                else: #Linux but not GSTPlaybin
+                    try: return(process.poll() is None)
+                    except: pass
+        return isSongPlaying
 
-# This just references the command 'playsound' to 'soundplay' with default to block/sync behaviour in case you want to use this in place
-# of the playsound module, which last I checked was not being maintained.
-def playsound(fileName, block=True):
-    return(playwave(fileName, block))
+
 
 # this function will loop a wave file and return an instance of a MusicLooper object that loops music,
 # or in the case of Windows it returns an object containing variables used to track if the song is playing
@@ -275,5 +394,11 @@ def getIsLoopPlaying(looperObject):
     else:
         return False
 
-# just to be consistent since I included 'playsound' although the playsound module doesn't actually contain a method/function 'stopsound'
-stopsound=stopwave
+### definitely these names used by MusicLooper, might also be typed in by user
+playwave=soundplay
+stopwave=stopsound
+
+# This just references the command 'playsound' to 'soundplay' with default to block/sync behaviour in case you want to use this in place
+# of the playsound module, which last I checked was not being maintained.
+def playsound(fileName, block=True):
+    return(soundplay(fileName, block))
