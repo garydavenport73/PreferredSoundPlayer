@@ -1,23 +1,26 @@
-#   Gary Davenport preferredsoundplayer functions 7/8/2021
+#   Gary Davenport preferredsoundplayer functions 7/9/2021
 #
 #   This module has no dependencies, other than what comes with Windows 10, 
 #       the standard Linux kernel, MacOS 10.5 or later, and the 
 #       Python Standard Library.
 #
+#   Looping:
+#   If sound files are .wav files they will loop in a thread loop duration is equal to length of .wav file
+#   Mp3s will be looped by checking 5 times a second to see if sound has finished, and if so relaunch
+#   (this is because it is harder to figure out time length of mp3 due to different styles encoding)
+#
 #   ----------------Windows----------------
-#   Windows 10 uses the Windows winmm.dll Multimedia API to play sounds and the Python 'winsound' module to loop background .
-#   (Windows will only loop one background sound at a time.)
+#   Windows 10 uses the Windows winmm.dll Multimedia API to play sounds.
 #       See references:
 #       “Programming Windows: the Definitive Guide to the WIN32 API, 
 #           Chapter 22 Sound and Music Section III Advanced Topics 
 #           ‘The MCI Command String Approach.’”
 #           Programming Windows: the Definitive Guide to the WIN32 API, 
-#           by Charles Petzold, Microsoft Press, 1999. 
+#           by Charles Petzold, Microsoft Press, 1999.
+#       https://stackoverflow.com/questions/22253074/how-to-play-or-open-mp3-or-wav-sound-file-in-c-program
 #       https://github.com/michaelgundlach/mp3play
 #       & https://github.com/TaylorSMarks/playsound/blob/master/playsound.py
 #
-#       To loop sounds, Windows10 uses winsound.Playsound() which does limit
-#       background loops to only 1 at a time compared to the other OS and only .wav
 #
 #   ----------------Linux------------------
 #   Linux uses ALSA and gstreamer, part of Linux kernel, also may use ffmpg if available
@@ -32,10 +35,11 @@
 #
 #   ----------------MacOS-------------------
 #   -MacOS uses the afplay module which is present OS X 10.5 and later
-#       
+#
 
 from random import random
 from platform import system
+from soundplaywindowswithloop import getIsPlaying
 import subprocess
 from subprocess import Popen, PIPE
 import os
@@ -57,7 +61,6 @@ if system()=="Windows":
     from sys import getfilesystemencoding
     from threading import Thread
     from time import sleep
-    import winsound
 
 # This module creates a single sound with winmm.dll API and returns the alias to the sound
 class SingleSoundWindows:
@@ -66,12 +69,12 @@ class SingleSoundWindows:
         self.sync=False
         self.P=None
         self.fileName=""
-        self.isSongPlaying=False
 
     # typical process for using winmm.dll
     def _processWindowsCommand(self,commmandString):
         buf = c_buffer(255)
         command = commmandString.encode(getfilesystemencoding())
+        #print(command)
         windll.winmm.mciSendStringA(command, buf, 254, 0)
         return buf.value
 
@@ -82,7 +85,8 @@ class SingleSoundWindows:
     # closed or stopped, it will still execute, but causes no harm.
     # it is to try and ensure that the sound will not remain open in memory.
     def _closeAliasAfterDuration(self):
-        sleep(float(self.durationInMS) / 1000.0)   
+        sleep(float(self.durationInMS) / 1000.0)
+        alias=self.alias
         str1="stop "+self.alias
         self._processWindowsCommand(str1)
         str1="close "+self.alias
@@ -95,35 +99,63 @@ class SingleSoundWindows:
     #   duration, whether the sound was already closed or not.
     def soundplay(self,fileName, block=True):
         self.fileName=fileName
-        alias = 'playwave_' + str(random())
-        str1="open \""+self.fileName+"\""+" alias "+alias
+
+        #make an alias
+        alias = 'soundplay_' + str(random())
+        str1="open \"" + os.path.abspath(self.fileName) + "\""+" alias "+alias
         self._processWindowsCommand(str1)
-        str1="set "+alias+" time format milliseconds"
-        self._processWindowsCommand(str1)
+        
+        #get the length of the sound
         str1="status "+alias+" length"
         durationInMS=self._processWindowsCommand(str1)
-        str1="play "+alias+" from 0 to " + str(durationInMS.decode())
-        self._processWindowsCommand(str1)
 
-        if block==True:
-            sleep(float(durationInMS) / 1000.0)
-            str1="stop "+alias
+        #use the wait feature to block or not block when constructing mciSendString command
+        if block==False:
+            str1="play "+alias
+            self.alias=alias    #used by threaded function below
+            self.durationInMS=durationInMS #used by threaded function below
+            #play the sound
             self._processWindowsCommand(str1)
-            str1="close "+alias
-            self._processWindowsCommand(str1)
-
+            #delayed thread to stop and close
+            Thread(target=self._closeAliasAfterDuration,daemon=True).start()
         else:
-            self.alias=alias
-            self.durationInMS=durationInMS
-            T=Thread(target=self._closeAliasAfterDuration)
-            T.setDaemon(True)
-            T.start() 
-            self.P=alias
-            return self.P
+            #construct mciSendString command to wait i.e. blocking
+            str1="play "+alias +" wait"
+            #play the sound (blocking)
+            self._processWindowsCommand(str1)
+            #stop and close the sound after done
+            str1="stop "+self.alias
+            self._processWindowsCommand(str1)
+            str1="close "+self.alias
+            self._processWindowsCommand(str1)
+        
+        #return the alias of the sound
+        self.P=alias
+        return self.P
+
+    # this function uses the mci/windows api with a repeat call to loop sound
+    def loopsound(self,fileName):
+        alias = 'loopalias_' + str(random())
+        """#doesn't seem to bee needed
+        print(fileName[-4:])
+        if fileName[-4:]==".mp3":
+            str1="open \"" + os.path.abspath(fileName) + "\" type mpegvideo alias " + alias
+        elif fileName[-4:]==".wav":
+            str1="open \"" + os.path.abspath(fileName) + "\" type waveaudio alias " + alias
+        else:
+            str1="open \"" + os.path.abspath(fileName) + "\" type mpegvideo alias " + alias
+        print(str1)
+        """
+        str1="open \"" + os.path.abspath(fileName) + "\" type mpegvideo alias " + alias
+        self._processWindowsCommand(str1)
+        str1="play " + alias + " repeat"
+        self._processWindowsCommand(str1)
+        self.P=alias
+        return self.P
 
     # issue stop and close commands using the sound's alias
     def stopsound(self,sound):
-        try:    
+        try:
             str1="stop "+sound
             self._processWindowsCommand(str1)
             str1="close "+sound
@@ -144,6 +176,13 @@ class SingleSoundWindows:
             self.isSongPlaying=False
         return self.isSongPlaying
 
+def isFileAWav(fileName):
+    try:
+        if sndhdr.what(fileName)[0]=="wav":
+            return True
+    except:
+        return False
+
 class MusicLooper:
     def __init__(self, fileName):
         self.fileName = fileName
@@ -155,8 +194,18 @@ class MusicLooper:
 
     def _playloop(self):
         while self.playing==True:
-            self.songProcess=playwave(self.fileName)
-            sleep(self._getWavDurationFromFile())
+            # it is easy to get duration of wave file
+            if isFileAWav(self.fileName)==True: 
+                self.songProcess=playwave(self.fileName)
+                sleep(self._getWavDurationFromFile())
+            else:
+                # it is hard to get duration of non wave files so check 5 times a second and relaunch if ended
+                if self.songProcess is not None:
+                    if getIsPlaying(self.songProcess)==False:
+                        self.songProcess=playwave(self.fileName)
+                else:
+                    self.songProcess=playwave(self.fileName)
+                sleep(.2)
 
     # start looping a wave
     def startMusicLoopWave(self):
@@ -168,6 +217,7 @@ class MusicLooper:
             t = Thread(target=self._playloop)
             t.setDaemon(True)
             t.start()
+
     # stop looping a wave
     def stopMusicLoop(self):
         if self.playing==False:
@@ -190,22 +240,7 @@ class MusicLooper:
     def getPlaying(self):
         return(self.playing)
 
-# I just this custom class to pass back and forth this
-# tracker since the winsound module is implemented in a different
-# way (i.e. you don't pass back and for a winsound.Playsound() object, you send
-# the fileName "None" to it to stop sounds.
-# This is only used when looping sounds in Windows 10 using the winsound module.
-class customVariableTracker:
-    def __init__(self):
-        self.looping=False
-
-    def _setlooping(self,TrueorFalse):
-        self.looping=TrueorFalse
-
-    def _getlooping(self):
-        return(self.looping)
-
-###### 
+######Each sound gets its own Gst.init() and own sound player 
 class SingleSoundLinux:
     def __init__(self):
         import gi
@@ -253,34 +288,18 @@ class SingleSoundLinux:
 # but an instance of the class players above can be used also.          #
 #########################################################################       
 
-# plays a wave file and also returns the alias of the sound being played, async method is default
-"""
-def playwave(fileName, block=False):
-    fileName=fileName
-    if system()=="Linux": command = "exec aplay --quiet " + os.path.abspath(fileName)
-    elif system()=="Windows":
-        song=SingleSoundWindows().soundplay(fileName, block)
-        return(song)       
-    elif system()=="Darwin": command = "exec afplay \'" + os.path.abspath(fileName)+"\'"
-    else: print(str(system()+" unknown to wavecliplayer"));return None
-    if block==True: P = subprocess.Popen(command, universal_newlines=True, shell=True,stdout=PIPE, stderr=PIPE).communicate()
-    else: P = subprocess.Popen(command, universal_newlines=True, shell=True,stdout=PIPE, stderr=PIPE)
-    return P
-"""
-
 # plays a sound file and also returns the alias of the sound being played, async method is default
 def soundplay(fileName, block=False):
     ##if system()=="Linux": command = "exec aplay --quiet " + os.path.abspath(fileName)
     if system()=="Linux":
-        print(fileName[-4:])
-        if fileName[-4:]==".wav": #use alsa if .wav
-            print("using alsa because its a wav")
+        if isFileAWav(fileName)==True: #use alsa if .wav
+            #print("using alsa because its a wav")
             command = "exec aplay --quiet " + os.path.abspath(fileName)
         elif (shutil.which("gst-play-1.0") is not None)==True: #use gst-play-1.0 if available
-            print("using gst-play-1.0 since available")
+            #print("using gst-play-1.0 since available")
             command = "exec gst-play-1.0 " + os.path.abspath(fileName)
         elif (shutil.which("ffplay") is not None)==True:       #use ffplay if present
-            print("using ffplay since available")
+            #print("using ffplay since available")
             command = "exec ffplay -nodisp -autoexit -loglevel quiet " + os.path.abspath(fileName)
         else:
             try:
@@ -288,7 +307,7 @@ def soundplay(fileName, block=False):
                 gi.require_version('Gst', '1.0')
                 from gi.repository import Gst
                 song=SingleSoundLinux().soundplay(fileName, block)
-                print("using gst playbin - successful try")
+                #print("using gst playbin - successful try")
                 return(song)
             except:
                 print("must use ALSA, all else failed")
@@ -325,21 +344,6 @@ def stopsound(process):
         pass
         #print("process ", str(process), " not playing")
 
-"""
-def stopwave(process):
-    if process is not None:
-        try:
-            if process is not None:
-                if system()=="Windows":
-                    SingleSoundWindows().stopsound(process)          
-                else: process.terminate()
-        except:
-            pass
-            #print("process is not playing")
-    else:
-        pass
-        #print("process ", str(process), " not playing")
-"""
 # pass the process or alias(windows) to the song and return True or False if it is playing
 def getIsPlaying(process):
     if system()=="Windows":
@@ -354,30 +358,27 @@ def getIsPlaying(process):
                 else: #Linux but not GSTPlaybin
                     try: return(process.poll() is None)
                     except: pass
+            else:
+                try: return(process.poll() is None)
+                except: pass
+
         return isSongPlaying
 
-
-
 # this function will loop a wave file and return an instance of a MusicLooper object that loops music,
-# or in the case of Windows it returns an object containing variables used to track if the song is playing
-def loopwave(fileName):
+# or in the case of Windows it just calls the loop function in the Windows SingleSoundWindows class
+def loopsound(fileName):
     if system()=="Windows":
-        Thread(target=winsound.PlaySound, args=[fileName, winsound.SND_FILENAME | winsound.SND_LOOP | winsound.SND_ASYNC]).start()
-        looptrack=customVariableTracker()
-        looptrack._setlooping(True)
-        return(looptrack)
+        return(SingleSoundWindows().loopsound(fileName))
     else:
         looper=MusicLooper(fileName)
         looper.startMusicLoopWave()
         return(looper)
 
-# pass an instance of a MusicLooper object and stop the loop, in Windows, pass an instance of the customVariableTracker that is keeping
-# track of whether or not the song is looping.
+# pass an instance of a MusicLooper object and stop the loop, in Windows, use the Windows SingleSoundWindows class method
 def stoploop(looperObject):
     if looperObject is not None:
         if system()=="Windows":
-            winsound.PlaySound(None,winsound.SND_FILENAME)
-            looperObject._setlooping(False)
+            stopsound(looperObject)
         else:
             looperObject.stopMusicLoop()
     else:
@@ -387,16 +388,17 @@ def stoploop(looperObject):
 # checks to see if song process is playing, (or if song alias's status is 'playing' in the case of Windows), returns True or False
 def getIsLoopPlaying(looperObject):
     if looperObject is not None:
-        if system()=="Windows":
-            return looperObject._getlooping()
+        if system()=="Windows":	
+            return getIsPlaying(looperObject)
         else:
             return(looperObject.getPlaying())
     else:
         return False
 
-### definitely these names used by MusicLooper, might also be typed in by user
+### definitely these names used by MusicLooper, could also used by end user
 playwave=soundplay
 stopwave=stopsound
+loopwave=loopsound
 
 # This just references the command 'playsound' to 'soundplay' with default to block/sync behaviour in case you want to use this in place
 # of the playsound module, which last I checked was not being maintained.
