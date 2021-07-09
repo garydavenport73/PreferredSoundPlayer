@@ -128,7 +128,7 @@ https://github.com/michaelgundlach/mp3play
 & https://github.com/TaylorSMarks/playsound/blob/master/playsound.py
 
 #### Playing Sounds in Windows:
-This method of playing sounds allows for multiple simultaneous sounds, works well and has been used successfully in several projects.  As long as this dynamically linked library is bundled with the current version of Windows, I plan to use this as the preferred method of playing sounds unless there is a compelling reason to change.  In this case, I am using the reasoning "If it's not broke, don't fix it.".  Another advantage is it plays mp3s and other formats as well, not just .wav files.  It works well, is stable, loads and executes quickly, and has essentially never caused me any problems.  
+This method of playing sounds allows for multiple simultaneous sounds, works well and has been used successfully in several projects.  As long as this dynamically linked library is bundled with the current version of Windows, I plan to use this as the preferred method of playing sounds unless there is a compelling reason to change.  In this case, I am using the reasoning "If it's not broke, don't fix it.".  Another advantage is it plays mp3s and other formats as well, not just .wav files.  It works well, is stable, loads and executes quickly, and has essentially never caused me any problems.
 
 The Python `winsound` module on the other hand, is at least to me a bit odd in its syntax, less intuitive, and only uses wave files.  You basically can't play more than one wave at a time asynchronously.  This is severely limiting, so I don't prefer it for playing sounds.
 
