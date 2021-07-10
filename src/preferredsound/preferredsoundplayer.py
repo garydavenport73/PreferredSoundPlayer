@@ -39,7 +39,6 @@
 
 from random import random
 from platform import system
-from soundplaywindowswithloop import getIsPlaying
 import subprocess
 from subprocess import Popen, PIPE
 import os
