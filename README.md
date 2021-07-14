@@ -14,6 +14,9 @@ In a nutshell:
 
 #### -Windows 10 uses the Windows winmm.dll Multimedia API to play sounds.  
 
+
+#### -Linux will always play .wavs with ALSA
+#### -Otherwise, if file is not .wav:
 #### -Linux will use the first available player in this order: gst-1.0-play, ffmpeg, gst playbin(built on the fly) or ALSA
 -Linux will try to use gst-1.0-play first (usually present), if not present then
 
