@@ -35,13 +35,13 @@ In Linux, the duration of the sound file is calculated if it is a wav file, othe
 
 To use the module simply add:
 ```
-from preferredsound.preferredsoundplayer import *
+from preferredsoundplayer import *
 ```
 and this will import all its functions.
 
-The module essentially contains 3 functions for playing sound files:
+The module essentially contains 3 functions for working with sound files:
 ```
-soundplay("yourfilename.mp3")
+yourSound = soundplay("yourfilename.mp3") # or just soundplay("yourfilename.mp3")
 
 stopsound(yourSound)
 
@@ -67,7 +67,7 @@ you will have to use the return value of soundplay.  Read a little further and t
 ```
 soundplay("coolhipstersong.mp3") #-> this plays the mp3 file
 
-mysong=soundplay("coolhipstersong.mp3") #-> this plays the mp3 and also returns a reference to the song.
+mysong = soundplay("coolhipstersong.mp3") #-> this plays the mp3 and also returns a reference to the song.
 ```
 
 #### To stop your song:
@@ -99,16 +99,16 @@ soundplay("coolhipsong.mp3",block=True)
 
 * Note: commands below will work, but you cannot stop the song, because your progam will be blocked until the song is done playing
 
-mysong=soundplay("coolhipstersong.mp3",1) #-> this plays the wav file synchronously and also returns the song reference
+mysong = soundplay("coolhipstersong.mp3",1) #-> this plays the wav file synchronously and also returns the song reference
 
 or 
 
-mysong=soundplay("coolhipstersong.mp3",block=True) #-> this plays the wav file synchronously and also returns the song reference
+mysong = soundplay("coolhipstersong.mp3",block=True) #-> this plays the wav file synchronously and also returns the song reference
 
 ```
 #### To play a wave file in a continuous loop:
 ```
-myloop=loopwave("mybackgroundsong.wav")
+myloop = loopwave("mybackgroundsong.wav")
 ```
 This starts a background loop playing, but also returns a reference to the background process so it can be stopped.
 #### To stop the continuous loop from playing:
@@ -150,7 +150,7 @@ See https://pypi.org/project/oswaveplayer/ for an example.
 This is not a bad approach, but there is a little delay with the sound launch using the command line version.  This may not be a big issue for you when playing background music.  Another way to play multiple background sounds at once would be to use another module or to add the oswaveplayer to your project with the import statement:
 
 ```
-from oswave import oswaveplayer        #(this can be installed with "pip install oswaveplayer")
+from oswaveplayer import oswaveplayer        #(this can be installed with "pip install oswaveplayer")
 ```
 then use:
 ```
@@ -172,15 +172,15 @@ As far as I know the gst-1.0-play command is usually available on linux distribu
 
 #### You may not need a looping function to loop sounds:
 ##### A note on looping sounds in general:
-If you using a game loop in game building, you don't actually need to use these looping functions at all (although it may be a little more convenient).  You may notice that this module, and other packages I have written, all contain a function called getIsPlaying(yoursound).  You can simply implement a check in your game loop to see if yoursong is playing.  If it is, don't do anything.  If it is not, play the sound with `yoursound=soundplay("yourfilename.wav")`.  Maybe check every 10 frames or something like that in the game loop.
+If you using a game loop in game building, you don't actually need to use these looping functions at all (although it may be a little more convenient).  You may notice that this module, and other packages I have written, all contain a function called getIsPlaying(yoursound).  You can simply implement a check in your game loop to see if yoursong is playing.  If it is, don't do anything.  If it is not, play the sound with `yoursound = soundplay("yourfilename.wav")`.  Maybe check every 10 frames or something like that in the game loop.
 
 ### Other function references/aliases:
 I have included these aliases, in case this module is dropped in as a replacement for my other 2 sound playing modules, `oswaveplayer` and `preferredwaveplayer`.
 In other words, if someone has used those modules in a project and they need more functionality, they can import this one and it should work as it contains the same functions, but different implementation.  These 3 function names are available, but they simply are references for backwards compatibility.
 ```
-playwave=soundplay
-stopwave=stopsound
-loopwave=loopsound
+playwave = soundplay
+stopwave = stopsound
+loopwave = loopsound
 ```
 ### Notes about using this module as a replacement in the playsound module:
 
@@ -189,7 +189,7 @@ module can be used in place of the playsound module (https://github.com/TaylorSM
 
 Use:
 ```
-from preferredwave.preferredwaveplayer import playsound
+from preferredwaveplayer import playsound
 ```
 for backwards compatibility with the playsound module.
 
