@@ -201,6 +201,7 @@ class MusicLooper:
         self.fileName = fileName
         self.playing = False
         self.songProcess = None
+        #self.optionalForMp3s_CheckRestartHowOften = .2
 
     def _playwave(self):
         self.songProcess = playwave(self.fileName)
@@ -219,9 +220,12 @@ class MusicLooper:
                 else:
                     self.songProcess = playwave(self.fileName)
                 sleep(.2)
+                #sleep(self.optionalForMp3s_CheckRestartHowOften)
 
     # start looping a wave
     def startMusicLoopWave(self):
+    #def startMusicLoopWave(self,optionalForMp3s_CheckRestartHowOften=.2):
+        #self.optionalForMp3s_CheckRestartHowOften=optionalForMp3s_CheckRestartHowOften
         if self.playing == True:  # don't allow more than one background loop per instance of MusicLooper
             print("Already playing, stop before starting new.")
             return
@@ -414,6 +418,16 @@ def getIsPlaying(process):
 
 # this function will loop a wave file and return an instance of a MusicLooper object that loops music,
 # or in the case of Windows it just calls the loop function in the Windows SingleSoundWindows class
+
+"""
+def loopsound(fileName,optionalForMp3s_CheckRestartHowOften=.2):
+    if system() == "Windows":
+        return(windowsPlayer.loopsound(fileName))
+    else:
+        looper=MusicLooper(fileName)
+        looper.startMusicLoopWave(optionalForMp3s_CheckRestartHowOften)
+        return(looper)
+"""
 
 
 def loopsound(fileName):
