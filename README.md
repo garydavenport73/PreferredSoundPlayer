@@ -194,3 +194,12 @@ from preferredwaveplayer import playsound
 for backwards compatibility with the playsound module.
 
 I do not worry about playing urls with this module though.
+
+### Update 8/2/2021 -Manual 'Garbage Collection' now being performed in Windows when the winmm.dll module is used.
+I added garbage collection which I believe sorely needed for this module.  Other players which I have cited have used the windows multimedia module to play sounds by issuing c type commands from python to the winmm.dll module.  The problem is that memory is allocated for these sounds using the c language.  The wimm.dll module sounds are supposed to be closed in order to reallocate that memory.  In windows this can be done by using and event listenter to report when the playing of the sound is complete, and then it can be closed.
+
+It turns out is easy to issue a play command from python using the c commands wrapper.  However, it is much harder to set up an event listener and report it back to Python.  If it can be done at all it would be hard very complicated to do.
+
+So I created my own garbage collection algorithm from the Python side of things.  Basically, every time a call to the winmm.dll module is called, that alias is added to a list.  Also, all prior aliases in the list are checked to see if the sound is playing.  If it is not, stop and close calls are issued to that sound alias, then the alias is removed from the garbage collection list.
+
+In short before playing a new sound, prior sounds are checked to see if they have finished and then closed.  There is no event listended for, but cleanup is done at every play of a sound.
